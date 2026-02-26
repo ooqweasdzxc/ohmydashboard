@@ -1,7 +1,11 @@
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
 import { TTLCache } from './cache'
+
+const execFileAsync = promisify(execFile)
 
 // --- Raw types (what OpenCode stores on disk) ---
 
@@ -56,6 +60,16 @@ interface RawProject {
   worktree: string
   vcs: string
   time: { created: number; updated: number }
+}
+
+
+interface BunSqliteStatement {
+  all(...params: unknown[]): unknown[]
+}
+
+interface BunSqliteDatabase {
+  query(sql: string): BunSqliteStatement
+  close?: () => void
 }
 
 // --- Dashboard types (what the API returns) ---
@@ -131,7 +145,234 @@ export interface SessionMessage {
 
 // --- Constants ---
 
-const STORAGE_BASE = path.join(os.homedir(), '.local/share/opencode/storage')
+const DEFAULT_STORAGE_BASE = path.join(os.homedir(), '.local', 'share', 'opencode', 'storage')
+const DEFAULT_DB_PATH = path.join(os.homedir(), '.local', 'share', 'opencode', 'opencode.db')
+
+type StorageBackend =
+  | { type: 'json'; storageBase: string }
+  | { type: 'sqlite'; storageBase: string; dbPath: string }
+
+function getStorageCandidates(): string[] {
+  const candidates = [
+    process.env.OPENCODE_STORAGE_PATH,
+    process.env.OPENCODE_STORAGE,
+    process.env.XDG_DATA_HOME ? path.join(process.env.XDG_DATA_HOME, 'opencode/storage') : null,
+    DEFAULT_STORAGE_BASE,
+  ]
+
+  if (process.platform === 'win32') {
+    candidates.push(
+      process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'opencode/storage') : null,
+      path.join(os.homedir(), 'AppData', 'Local', 'opencode', 'storage'),
+      path.join(os.homedir(), '.local', 'share', 'opencode', 'storage'),
+      path.join(os.homedir(), '.opencode', 'storage'),
+    )
+  }
+
+  return candidates.filter((p): p is string => Boolean(p))
+}
+
+async function resolveStorageBase(): Promise<string> {
+  for (const candidate of getStorageCandidates()) {
+    try {
+      const stat = await fs.stat(candidate)
+      if (stat.isDirectory()) return candidate
+    } catch {
+      // try next candidate
+    }
+  }
+  return DEFAULT_STORAGE_BASE
+}
+
+function getDbPathCandidates(): string[] {
+  const candidates = [
+    process.env.OPENCODE_DB_PATH,
+    process.env.XDG_DATA_HOME ? path.join(process.env.XDG_DATA_HOME, 'opencode/opencode.db') : null,
+    DEFAULT_DB_PATH,
+  ]
+
+  if (process.platform === 'win32') {
+    candidates.push(
+      process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'opencode/opencode.db') : null,
+      path.join(os.homedir(), 'AppData', 'Local', 'opencode', 'opencode.db'),
+      path.join(os.homedir(), '.local', 'share', 'opencode', 'opencode.db'),
+    )
+  }
+
+  return candidates.filter((p): p is string => Boolean(p))
+}
+
+async function resolveDbPath(): Promise<string | null> {
+  for (const candidate of getDbPathCandidates()) {
+    try {
+      const stat = await fs.stat(candidate)
+      if (stat.isFile()) return candidate
+    } catch {
+      // try next candidate
+    }
+  }
+  return null
+}
+
+async function hasJsonSessions(storageBase: string): Promise<boolean> {
+  try {
+    const entries = await fs.readdir(path.join(storageBase, 'session'), { withFileTypes: true })
+    return entries.some((entry) => entry.isDirectory() || (entry.isFile() && entry.name.endsWith('.json')))
+  } catch {
+    return false
+  }
+}
+
+async function resolveBackend(): Promise<StorageBackend> {
+  const storageBase = await resolveStorageBase()
+  if (await hasJsonSessions(storageBase)) {
+    return { type: 'json', storageBase }
+  }
+
+  const dbPath = await resolveDbPath()
+  if (dbPath) {
+    return { type: 'sqlite', storageBase, dbPath }
+  }
+
+  return { type: 'json', storageBase }
+}
+
+function getStringField(row: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = row[key]
+    if (typeof value === 'string' && value.length > 0) return value
+  }
+  return ''
+}
+
+function getNumberField(row: Record<string, unknown>, keys: string[]): number | undefined {
+  for (const key of keys) {
+    const value = row[key]
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = Number(value)
+      if (Number.isFinite(parsed)) return parsed
+    }
+  }
+  return undefined
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> | null {
+  if (!value) return null
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null
+    } catch {
+      return null
+    }
+  }
+  return typeof value === 'object' ? value as Record<string, unknown> : null
+}
+
+function pickString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined
+}
+
+function pickNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return undefined
+}
+
+function normalizeTimestamp(value?: number): number {
+  if (!value || !Number.isFinite(value)) return Date.now()
+  return value < 1_000_000_000_000 ? value * 1000 : value
+}
+
+function getTimeField(row: Record<string, unknown>): { created: number; updated: number } {
+  const rawTime = row.time
+  if (typeof rawTime === 'string') {
+    try {
+      const parsed = JSON.parse(rawTime) as { created?: number; updated?: number }
+      const created = normalizeTimestamp(parsed.created)
+      const updated = normalizeTimestamp(parsed.updated ?? parsed.created)
+      return { created, updated }
+    } catch {
+      // fallback to flat fields
+    }
+  }
+  if (rawTime && typeof rawTime === 'object') {
+    const timeObj = rawTime as { created?: number; updated?: number }
+    const created = normalizeTimestamp(timeObj.created)
+    const updated = normalizeTimestamp(timeObj.updated ?? timeObj.created)
+    return { created, updated }
+  }
+
+  const created = normalizeTimestamp(getNumberField(row, ['created', 'createdAt', 'created_at', 'time_created']))
+  const updated = normalizeTimestamp(getNumberField(row, ['updated', 'updatedAt', 'updated_at', 'time_updated']) ?? created)
+  return { created, updated }
+}
+
+function parseTokens(value: unknown): RawMessage['tokens'] | undefined {
+  const tokenObj = parseJsonObject(value)
+  if (!tokenObj) return undefined
+  const usageObj = parseJsonObject(tokenObj.usage)
+  const cacheObj = parseJsonObject(tokenObj.cache) ?? {}
+
+  const input = pickNumber(tokenObj.input) ?? pickNumber(tokenObj.input_tokens) ?? pickNumber(tokenObj.prompt) ?? pickNumber(usageObj?.input) ?? pickNumber(usageObj?.input_tokens)
+  const output = pickNumber(tokenObj.output) ?? pickNumber(tokenObj.output_tokens) ?? pickNumber(tokenObj.completion) ?? pickNumber(usageObj?.output) ?? pickNumber(usageObj?.output_tokens)
+  const reasoning = pickNumber(tokenObj.reasoning) ?? pickNumber(tokenObj.reasoning_tokens) ?? pickNumber(usageObj?.reasoning) ?? pickNumber(usageObj?.reasoning_tokens) ?? 0
+
+  if (input === undefined && output === undefined && reasoning === 0) return undefined
+
+  return {
+    input: input ?? 0,
+    output: output ?? 0,
+    reasoning,
+    cache: {
+      read: pickNumber(cacheObj.read) ?? pickNumber(cacheObj.input) ?? 0,
+      write: pickNumber(cacheObj.write) ?? pickNumber(cacheObj.output) ?? 0,
+    },
+  }
+}
+
+function resolveMessageFields(row: Record<string, unknown>) {
+  const meta = parseJsonObject(row.meta) ?? parseJsonObject(row.metadata) ?? parseJsonObject(row.info) ?? parseJsonObject(row.data)
+  const usage = parseJsonObject(meta?.usage)
+  const model = parseJsonObject(meta?.model)
+
+  const modelID = getStringField(row, ['modelID', 'model_id', 'modelId']) ||
+    pickString(meta?.modelID) || pickString(meta?.model_id) || pickString(meta?.modelId) ||
+    pickString(meta?.model) || pickString(model?.id) || pickString(model?.name)
+
+  const providerID = getStringField(row, ['providerID', 'provider_id', 'providerId']) ||
+    pickString(meta?.providerID) || pickString(meta?.provider_id) || pickString(meta?.providerId) ||
+    pickString(model?.provider)
+
+  const agent = getStringField(row, ['agent', 'agentName', 'agent_name']) ||
+    pickString(meta?.agent) || pickString(meta?.agentName) || pickString(meta?.agent_name)
+
+  const cost = getNumberField(row, ['cost', 'total_cost', 'totalCost']) ??
+    pickNumber(meta?.cost) ?? pickNumber(meta?.totalCost) ?? pickNumber(meta?.total_cost)
+
+  const tokens = parseTokens(row.tokens) ?? parseTokens(meta?.tokens) ?? parseTokens(usage)
+
+  return {
+    modelID: modelID || undefined,
+    providerID: providerID || undefined,
+    agent: agent || undefined,
+    cost,
+    tokens,
+  }
+}
+
+function asRecordArray(data: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(data)) return []
+  return data.filter((row): row is Record<string, unknown> => !!row && typeof row === 'object')
+}
+
+function escapeSqlString(value: string): string {
+  return value.replaceAll("'", "''")
+}
 
 const MODEL_COLORS: Record<string, string> = {
   'claude-sonnet-4.5': '#3b82f6',
@@ -210,6 +451,20 @@ function getCutoff(range: DateRange): number {
 
 export class OpenCodeReader {
   private cache = new TTLCache<unknown>(30_000)
+  private backendPromise: Promise<StorageBackend>
+  private storageBasePromise: Promise<string>
+
+  private sqliteTableNameCache = new Map<string, string | null>()
+  private sqliteLoggedError = false
+
+  constructor() {
+    this.backendPromise = resolveBackend()
+    this.storageBasePromise = this.backendPromise.then((backend) => backend.storageBase)
+  }
+
+  async getStorageBase(): Promise<string> {
+    return this.storageBasePromise
+  }
 
   private async cachedFetch<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
     const cached = this.cache.get(key) as T | null
@@ -219,34 +474,201 @@ export class OpenCodeReader {
     return data
   }
 
+  async getBackendInfo(): Promise<StorageBackend> {
+    return this.backendPromise
+  }
+
+  private async sqliteQueryViaBun(sql: string): Promise<Record<string, unknown>[] | null> {
+    if (this.bunSqliteUnavailable) return null
+
+    const backend = await this.getBackendInfo()
+    if (backend.type !== 'sqlite') return []
+
+    try {
+      if (!this.bunSqliteDb || this.bunSqliteDbPath !== backend.dbPath) {
+        this.bunSqliteDb?.close?.()
+        const sqliteModule = await import('bun:sqlite')
+        const BunDatabase = sqliteModule.Database as unknown as new (dbPath: string, options?: { readonly?: boolean }) => BunSqliteDatabase
+        this.bunSqliteDb = new BunDatabase(backend.dbPath, { readonly: true })
+        this.bunSqliteDbPath = backend.dbPath
+      }
+
+      return asRecordArray(this.bunSqliteDb.query(sql).all())
+    } catch {
+      this.bunSqliteUnavailable = true
+      this.bunSqliteDb?.close?.()
+      this.bunSqliteDb = null
+      this.bunSqliteDbPath = null
+      return null
+    }
+  }
+
+  private async sqliteQuery(sql: string): Promise<Record<string, unknown>[]> {
+    const backend = await this.getBackendInfo()
+    if (backend.type !== 'sqlite') return []
+
+    const bunRows = await this.sqliteQueryViaBun(sql)
+    if (bunRows) return bunRows
+
+    try {
+      const { stdout } = await execFileAsync('sqlite3', [backend.dbPath, '-json', sql], { maxBuffer: 20 * 1024 * 1024 })
+      return asRecordArray(JSON.parse(stdout || '[]'))
+    } catch (error) {
+      if (!this.sqliteLoggedError) {
+        this.sqliteLoggedError = true
+
+      }
+      return []
+    }
+  }
+
+  private async sqliteResolveTableName(cacheKey: string, candidates: string[]): Promise<string | null> {
+    if (this.sqliteTableNameCache.has(cacheKey)) {
+      return this.sqliteTableNameCache.get(cacheKey) ?? null
+    }
+
+    for (const tableName of candidates) {
+      const escaped = escapeSqlString(tableName)
+      const rows = await this.sqliteQuery(`SELECT name FROM sqlite_master WHERE type='table' AND name='${escaped}' LIMIT 1;`)
+      if (rows.length > 0) {
+        this.sqliteTableNameCache.set(cacheKey, tableName)
+        return tableName
+      }
+    }
+
+    this.sqliteTableNameCache.set(cacheKey, null)
+    return null
+  }
+
+  private async sqliteTableColumns(table: string): Promise<Set<string>> {
+    const rows = await this.sqliteQuery(`PRAGMA table_info(${table});`)
+    return new Set(rows.map((row) => String(row.name ?? '')))
+  }
+
+  private async sqliteLoadSessions(): Promise<RawSession[]> {
+    const sessionTable = await this.sqliteResolveTableName('session', ['session', 'sessions'])
+    if (!sessionTable) return []
+    const rows = await this.sqliteQuery(`SELECT * FROM ${sessionTable};`)
+    return rows.map((row) => {
+      const id = getStringField(row, ['id'])
+      const title = getStringField(row, ['title', 'slug'])
+      const slug = getStringField(row, ['slug', 'title'])
+      return {
+        id,
+        slug,
+        version: getStringField(row, ['version']),
+        projectID: getStringField(row, ['projectID', 'project_id', 'projectId']),
+        directory: getStringField(row, ['directory', 'worktree', 'cwd']),
+        parentID: getStringField(row, ['parentID', 'parent_id', 'parentId']) || undefined,
+        title,
+        time: getTimeField(row),
+      }
+    }).filter((row) => row.id || row.slug)
+  }
+
+  private async sqliteLoadMessages(sessionId?: string): Promise<RawMessage[]> {
+    const messageTable = await this.sqliteResolveTableName('message', ['message', 'messages'])
+    if (!messageTable) return []
+    const where = sessionId ? ` WHERE sessionID = '${escapeSqlString(sessionId)}' OR session_id = '${escapeSqlString(sessionId)}' OR sessionId = '${escapeSqlString(sessionId)}'` : ''
+    const rows = await this.sqliteQuery(`SELECT * FROM ${messageTable}${where};`)
+
+    return rows.map((row) => {
+      const resolved = resolveMessageFields(row)
+      return {
+      id: getStringField(row, ['id']),
+      sessionID: getStringField(row, ['sessionID', 'session_id', 'sessionId']),
+      role: getStringField(row, ['role']) || 'assistant',
+      time: getTimeField(row),
+      parentID: getStringField(row, ['parentID', 'parent_id', 'parentId']) || undefined,
+      modelID: resolved.modelID,
+      providerID: resolved.providerID,
+      mode: getStringField(row, ['mode']) || undefined,
+      agent: resolved.agent,
+      cost: resolved.cost,
+      tokens: resolved.tokens,
+      finish: getStringField(row, ['finish']) || undefined,
+      }
+    }).filter((msg) => msg.id && msg.sessionID)
+  }
+
+  private async sqliteLoadParts(messageId: string): Promise<RawPart[]> {
+    const partTable = await this.sqliteResolveTableName('part', ['part', 'parts'])
+    if (!partTable) return []
+    const rows = await this.sqliteQuery(
+      `SELECT * FROM ${partTable} WHERE messageID = '${escapeSqlString(messageId)}' OR message_id = '${escapeSqlString(messageId)}' OR messageId = '${escapeSqlString(messageId)}';`
+    )
+
+    return rows.map((row) => ({
+      id: getStringField(row, ['id']),
+      sessionID: getStringField(row, ['sessionID', 'session_id', 'sessionId']),
+      messageID: getStringField(row, ['messageID', 'message_id', 'messageId']),
+      type: getStringField(row, ['type']) || 'text',
+      text: getStringField(row, ['text']) || undefined,
+      cost: getNumberField(row, ['cost']),
+      tokens: parseTokens(row.tokens),
+    })).filter((part) => part.id && part.messageID)
+  }
+
   // --- Raw data readers ---
 
   async getAllProjects(): Promise<RawProject[]> {
-    return this.cachedFetch('projects', () =>
-      readJsonDir<RawProject>(path.join(STORAGE_BASE, 'project'))
-    )
+    return this.cachedFetch('projects', async () => {
+      const backend = await this.getBackendInfo()
+      if (backend.type === 'sqlite') {
+        const projectTable = await this.sqliteResolveTableName('project', ['project', 'projects'])
+        if (!projectTable) return []
+        const columns = await this.sqliteTableColumns(projectTable)
+        if (columns.size === 0) return []
+        const rows = await this.sqliteQuery(`SELECT * FROM ${projectTable};`)
+        return rows.map((row) => ({
+          id: getStringField(row, ['id']),
+          worktree: getStringField(row, ['worktree', 'directory']),
+          vcs: getStringField(row, ['vcs']) || 'unknown',
+          time: getTimeField(row),
+        })).filter((project) => project.id)
+      }
+
+      const storageBase = await this.getStorageBase()
+      return readJsonDir<RawProject>(path.join(storageBase, 'project'))
+    })
   }
 
   async getAllSessions(): Promise<RawSession[]> {
-    return this.cachedFetch('sessions', () =>
-      readNestedJsonDir<RawSession>(path.join(STORAGE_BASE, 'session'))
-    )
+    return this.cachedFetch('sessions', async () => {
+      const backend = await this.getBackendInfo()
+      if (backend.type === 'sqlite') return this.sqliteLoadSessions()
+
+      const storageBase = await this.getStorageBase()
+      return readNestedJsonDir<RawSession>(path.join(storageBase, 'session'))
+    })
   }
 
   async getAllMessages(): Promise<RawMessage[]> {
-    return this.cachedFetch('messages', () =>
-      readNestedJsonDir<RawMessage>(path.join(STORAGE_BASE, 'message'))
-    )
+    return this.cachedFetch('messages', async () => {
+      const backend = await this.getBackendInfo()
+      if (backend.type === 'sqlite') return this.sqliteLoadMessages()
+
+      const storageBase = await this.getStorageBase()
+      return readNestedJsonDir<RawMessage>(path.join(storageBase, 'message'))
+    })
   }
 
   async getSessionMessages(sessionId: string): Promise<RawMessage[]> {
-    return this.cachedFetch(`messages:${sessionId}`, () =>
-      readJsonDir<RawMessage>(path.join(STORAGE_BASE, 'message', sessionId))
-    )
+    return this.cachedFetch(`messages:${sessionId}`, async () => {
+      const backend = await this.getBackendInfo()
+      if (backend.type === 'sqlite') return this.sqliteLoadMessages(sessionId)
+
+      const storageBase = await this.getStorageBase()
+      return readJsonDir<RawMessage>(path.join(storageBase, 'message', sessionId))
+    })
   }
 
   async getMessageParts(messageId: string): Promise<RawPart[]> {
-    return readJsonDir<RawPart>(path.join(STORAGE_BASE, 'part', messageId))
+    const backend = await this.getBackendInfo()
+    if (backend.type === 'sqlite') return this.sqliteLoadParts(messageId)
+
+    const storageBase = await this.getStorageBase()
+    return readJsonDir<RawPart>(path.join(storageBase, 'part', messageId))
   }
 
   // --- Transform to dashboard types ---
