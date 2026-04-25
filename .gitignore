@@ -22,7 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-<<<<<<< HEAD
 
 # Sisyphus work state (plans, drafts, boulder)
 .sisyphus
@@ -33,5 +32,3 @@ dist-ssr
 # Temporary files
 *.tmp
 
-=======
->>>>>>> 6533805 (feat: first commit ⚡)

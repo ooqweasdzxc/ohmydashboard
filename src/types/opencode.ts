@@ -26,10 +26,7 @@ export interface DashboardStats {
   totalSessions: number
   totalMessages: number
   totalCost: number
-<<<<<<< HEAD
   totalTokens: number
-=======
->>>>>>> 6533805 (feat: first commit ⚡)
   activeAgents: number
 }
 
@@ -39,7 +36,6 @@ export interface AgentUsage {
   percentage: number
   totalMessages: number
 }
-<<<<<<< HEAD
 
 // ── Phase 2 types ───────────────────────────────────────────
 
@@ -77,5 +73,3 @@ export interface SessionMessage {
 }
 
 export type DateRange = 'today' | 'week' | 'month' | 'all'
-=======
->>>>>>> 6533805 (feat: first commit ⚡)

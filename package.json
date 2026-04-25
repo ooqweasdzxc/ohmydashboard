@@ -1,5 +1,4 @@
 {
-<<<<<<< HEAD
   "name": "@radenadri/ohmydashboard",
   "version": "0.6.1",
   "description": "Agent monitoring dashboard for OpenCode — run with bunx ohmydashboard",
@@ -15,38 +14,25 @@
   "engines": {
     "bun": ">=1.1.0"
   },
-=======
-  "name": "ohmydashboard",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
->>>>>>> 6533805 (feat: first commit ⚡)
   "scripts": {
     "dev": "concurrently \"vite\" \"tsx watch server/index.ts\"",
     "dev:frontend": "vite",
     "dev:server": "tsx watch server/index.ts",
     "build": "tsc -b && vite build",
-<<<<<<< HEAD
     "build:ui": "vite build",
     "verify:runtime-imports": "node scripts/verify-runtime-imports.mjs",
     "verify:pack": "node scripts/verify-pack.mjs",
     "verify:smoke": "node scripts/smoke-local-pack.mjs",
     "release:verify": "npm run verify:runtime-imports && npm run build && npm run verify:pack && npm run verify:smoke",
     "prepublishOnly": "npm run release:verify",
-=======
->>>>>>> 6533805 (feat: first commit ⚡)
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
-<<<<<<< HEAD
     "@hono/node-server": "^1.19.9",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-table": "^8.21.3",
     "hono": "^4.11.9",
-=======
-    "@tailwindcss/vite": "^4.1.18",
->>>>>>> 6533805 (feat: first commit ⚡)
     "lucide-react": "^0.563.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -55,10 +41,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
-<<<<<<< HEAD
-=======
-    "@hono/node-server": "^1.19.9",
->>>>>>> 6533805 (feat: first commit ⚡)
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
@@ -68,10 +50,6 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
-<<<<<<< HEAD
-=======
-    "hono": "^4.11.9",
->>>>>>> 6533805 (feat: first commit ⚡)
     "tsx": "^4.21.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.48.0",

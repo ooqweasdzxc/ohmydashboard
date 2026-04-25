@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import { Activity, MessagesSquare, Users, Coins } from 'lucide-react'
 import type { DashboardStats } from '@/types/opencode'
 
@@ -8,11 +7,6 @@ function formatTokens(n: number): string {
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
   return n.toLocaleString()
 }
-=======
-import { Activity, MessagesSquare, DollarSign, Users } from 'lucide-react'
-import type { DashboardStats } from '@/types/opencode'
-import { formatCost } from '@/lib/utils'
->>>>>>> 6533805 (feat: first commit ⚡)
 
 interface Props {
   stats: DashboardStats | null
@@ -22,11 +16,7 @@ interface Props {
 const cards = [
   { key: 'totalSessions' as const, label: 'Total Sessions', icon: Activity, accent: 'text-blue-400' },
   { key: 'totalMessages' as const, label: 'Total Messages', icon: MessagesSquare, accent: 'text-emerald-400' },
-<<<<<<< HEAD
   { key: 'totalTokens' as const, label: 'Total Tokens', icon: Coins, accent: 'text-cyan-400', format: formatTokens },
-=======
-  { key: 'totalCost' as const, label: 'Total Cost', icon: DollarSign, accent: 'text-amber-400', format: formatCost },
->>>>>>> 6533805 (feat: first commit ⚡)
   { key: 'activeAgents' as const, label: 'Active Agents', icon: Users, accent: 'text-purple-400' },
 ]
 

@@ -1,9 +1,5 @@
 import type { AgentActivity } from '@/types/opencode'
-<<<<<<< HEAD
 import { cn, formatElapsed, getAgentColor } from '@/lib/utils'
-=======
-import { cn, formatElapsed, getAgentColor, truncateId } from '@/lib/utils'
->>>>>>> 6533805 (feat: first commit ⚡)
 
 interface Props {
   agents: AgentActivity[]
@@ -25,11 +21,7 @@ export function ActiveAgents({ agents, loading }: Props) {
   })
 
   return (
-<<<<<<< HEAD
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden h-full flex flex-col">
-=======
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
->>>>>>> 6533805 (feat: first commit ⚡)
       <div className="px-5 py-4 border-b border-zinc-800">
         <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Active Agents</h2>
       </div>

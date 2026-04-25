@@ -1,10 +1,6 @@
 # OhMyDashboard — Tasks
 
-<<<<<<< HEAD
 > Generated from BRIEF.md. Phases 1-7 complete. Phase 8 planned.
-=======
-> Generated from BRIEF.md. Phase 1 MVP implementation complete.
->>>>>>> 6533805 (feat: first commit ⚡)
 
 ---
 
@@ -60,7 +56,6 @@
 - [x] 9.1 Frontend connected to backend via Vite proxy (`/api` → localhost:3456)
 - [x] 9.2 Verified with browser automation — all panels render correctly
 - [x] 9.3 Build passes (`vite build` — no TS errors)
-<<<<<<< HEAD
 - [x] 9.4 Connect to real OpenCode CLI data (requires CLI adapter — Phase 3)
 
 ---
@@ -142,53 +137,12 @@
 ### Future Enhancements
 - [ ] SSE real-time updates (OpenCode has SSE in sst/opencode-sdk-go)
 - [ ] Cost estimation from token counts (when providers don't report cost)
-=======
-- [ ] 9.4 Connect to real OpenCode CLI data (requires CLI adapter — Phase 2)
-
----
-
-## Phase 2: Analytics & Real Data (Next)
-
-### 10. Real Data Integration
-- [ ] 10.1 Build OpenCode CLI adapter (`server/opencode-adapter.ts`)
-- [ ] 10.2 Wrap `opencode session list --json` and `opencode session info --json`
-- [ ] 10.3 Add in-memory cache with TTL for CLI results
-- [ ] 10.4 Replace mock data with real CLI output
-
-### 11. Cost Tracking Chart
-- [ ] 11.1 Daily/weekly cost breakdown line chart
-- [ ] 11.2 Cost per agent stacked bar chart
-
-### 12. Model Distribution
-- [ ] 12.1 Donut chart showing model usage (claude, gpt, gemini)
-- [ ] 12.2 Cost contribution per model
-
-### 13. Activity Heatmap
-- [ ] 13.1 GitHub-style contribution grid (7 days × 24 hours)
-- [ ] 13.2 Color intensity based on message volume
-
-### 14. Session Detail View
-- [ ] 14.1 Click session to expand and see messages
-- [ ] 14.2 Message timeline with role/content/timestamp
-
-### 15. Date Range Filtering
-- [ ] 15.1 Date picker for filtering sessions
-- [ ] 15.2 Today/Week/Month preset buttons
-
----
-
-## Phase 3: Advanced (Future)
-
-- [ ] SSE real-time updates (if OpenCode supports it)
-- [ ] Cost alerts / budget warnings
->>>>>>> 6533805 (feat: first commit ⚡)
 - [ ] Agent performance metrics (time to complete)
 - [ ] Export data to CSV/JSON
 - [ ] Multi-project comparison view
 
 ---
 
-<<<<<<< HEAD
 ## Phase 4: Session Table with Pagination & Filters ✅
 
 ### 22. TanStack Table Integration ✅
@@ -324,15 +278,12 @@
 
 ---
 
-=======
->>>>>>> 6533805 (feat: first commit ⚡)
 ## Architecture
 
 ```
 ohmydashboard/
 ├── BRIEF.md                        # Project brief
 ├── TASKS.md                        # This file
-<<<<<<< HEAD
 ├── GUIDE.md                        # CLI packaging guide
 ├── package.json                    # Vite + React 19 + Tailwind v4 + Hono + TanStack Table
 ├── vite.config.ts                  # Tailwind plugin, @/ alias, proxy, base: "./"
@@ -360,25 +311,6 @@ ohmydashboard/
     ├── index.ts                    # Hono API server (8 endpoints, port 3456)
     ├── opencode-reader.ts          # Reads OpenCode JSON storage directly
     └── cache.ts                    # Generic TTL cache (30s default)
-=======
-├── package.json                    # Vite + React 19 + Tailwind v4 + Hono
-├── vite.config.ts                  # Tailwind plugin, @/ alias, proxy
-├── tsconfig.app.json               # Strict TS, path aliases
-├── src/
-│   ├── main.tsx                    # Entry point
-│   ├── index.css                   # Tailwind v4 import + dark theme
-│   ├── App.tsx                     # Main dashboard layout
-│   ├── types/opencode.ts           # TypeScript interfaces
-│   ├── lib/utils.ts                # formatCost, formatTimeAgo, cn()
-│   ├── hooks/useDashboardData.ts   # Auto-refresh data fetcher
-│   └── components/dashboard/
-│       ├── SummaryCards.tsx         # 4 stat cards
-│       ├── ActiveAgents.tsx        # Agent activity table
-│       ├── SessionTimeline.tsx     # Recent sessions list
-│       └── AgentLeaderboard.tsx    # Agent usage bar chart
-└── server/
-    └── index.ts                    # Hono API server (port 3456)
->>>>>>> 6533805 (feat: first commit ⚡)
 ```
 
 ## Commands
