@@ -1,6 +1,10 @@
+<<<<<<< HEAD
 import { useState, useCallback } from 'react'
 import { ChevronDown, ChevronRight, User, Bot } from 'lucide-react'
 import type { Session, SessionMessage } from '@/types/opencode'
+=======
+import type { Session } from '@/types/opencode'
+>>>>>>> 6533805 (feat: first commit ⚡)
 import { cn, formatCost, formatTimeAgo, getAgentColor, truncateId } from '@/lib/utils'
 
 interface Props {
@@ -9,6 +13,7 @@ interface Props {
 }
 
 export function SessionTimeline({ sessions, loading }: Props) {
+<<<<<<< HEAD
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [messages, setMessages] = useState<SessionMessage[]>([])
   const [loadingMessages, setLoadingMessages] = useState(false)
@@ -36,6 +41,10 @@ export function SessionTimeline({ sessions, loading }: Props) {
     }
   }, [expandedId])
 
+=======
+  const sorted = [...sessions].sort((a, b) => b.time.updated - a.time.updated)
+
+>>>>>>> 6533805 (feat: first commit ⚡)
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
       <div className="px-5 py-4 border-b border-zinc-800">
@@ -48,6 +57,7 @@ export function SessionTimeline({ sessions, loading }: Props) {
         <div className="p-8 text-center text-zinc-600">No sessions</div>
       ) : (
         <div className="divide-y divide-zinc-800/50">
+<<<<<<< HEAD
           {sorted.map((session) => {
             const isExpanded = expandedId === session.id
             return (
@@ -138,6 +148,38 @@ export function SessionTimeline({ sessions, loading }: Props) {
               </div>
             )
           })}
+=======
+          {sorted.map((session) => (
+            <div key={session.id} className="px-5 py-4 hover:bg-zinc-800/30 transition-colors">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs text-zinc-500">{truncateId(session.id, 12)}</span>
+                    <span className="text-zinc-600">·</span>
+                    <span className="text-xs text-zinc-500">{formatTimeAgo(session.time.updated)}</span>
+                  </div>
+                  <p className="text-sm text-zinc-300 mt-1 font-mono truncate" title={session.directory}>
+                    {session.directory.replace('/Users/macbook/Documents/Work/', '~/')}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {session.agents.map((agent) => (
+                      <span
+                        key={agent}
+                        className={cn('inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium border', getAgentColor(agent))}
+                      >
+                        {agent}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-mono text-zinc-300">{session.messageCount} <span className="text-zinc-500">msgs</span></p>
+                  <p className="text-sm font-mono text-amber-400 mt-1">{formatCost(session.cost)}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+>>>>>>> 6533805 (feat: first commit ⚡)
         </div>
       )}
     </div>

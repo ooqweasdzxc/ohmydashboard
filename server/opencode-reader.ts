@@ -1,6 +1,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
+import { Database } from 'bun:sqlite'
 import { TTLCache } from './cache'
 
 // --- Raw types (what OpenCode stores on disk) ---
@@ -132,6 +133,7 @@ export interface SessionMessage {
 // --- Constants ---
 
 const STORAGE_BASE = path.join(os.homedir(), '.local/share/opencode/storage')
+const DB_PATH = path.join(os.homedir(), '.local/share/opencode/opencode.db')
 
 const MODEL_COLORS: Record<string, string> = {
   'claude-sonnet-4.5': '#3b82f6',
@@ -222,31 +224,103 @@ export class OpenCodeReader {
   // --- Raw data readers ---
 
   async getAllProjects(): Promise<RawProject[]> {
-    return this.cachedFetch('projects', () =>
-      readJsonDir<RawProject>(path.join(STORAGE_BASE, 'project'))
-    )
+    return this.cachedFetch('projects', () => {
+      const db = new Database(DB_PATH)
+      const rows = db.query("SELECT * FROM project").all() as any[]
+      db.close()
+      return rows.map(row => ({
+        id: row.id,
+        worktree: row.worktree,
+        vcs: row.vcs,
+        time: { created: row.time_created, updated: row.time_updated }
+      }))
+    })
   }
 
   async getAllSessions(): Promise<RawSession[]> {
-    return this.cachedFetch('sessions', () =>
-      readNestedJsonDir<RawSession>(path.join(STORAGE_BASE, 'session'))
-    )
+    return this.cachedFetch('sessions', () => {
+      const db = new Database(DB_PATH)
+      const rows = db.query("SELECT * FROM session").all() as any[]
+      db.close()
+      return rows.map(row => ({
+        id: row.id,
+        slug: row.slug,
+        version: row.version,
+        projectID: row.project_id,
+        directory: row.directory,
+        parentID: row.parent_id,
+        title: row.title,
+        time: { created: row.time_created, updated: row.time_updated }
+      }))
+    })
   }
 
   async getAllMessages(): Promise<RawMessage[]> {
-    return this.cachedFetch('messages', () =>
-      readNestedJsonDir<RawMessage>(path.join(STORAGE_BASE, 'message'))
-    )
+    return this.cachedFetch('messages', () => {
+      const db = new Database(DB_PATH)
+      const rows = db.query("SELECT * FROM message").all() as any[]
+      db.close()
+      return rows.map(row => {
+        const data = JSON.parse(row.data || '{}')
+        return {
+          id: row.id,
+          sessionID: row.session_id,
+          role: data.role || 'user',
+          time: { created: row.time_created, completed: row.time_updated },
+          parentID: data.parentID,
+          modelID: data.modelID,
+          providerID: data.providerID,
+          mode: data.mode,
+          agent: data.agent,
+          cost: data.cost,
+          tokens: data.tokens,
+          finish: data.finish
+        }
+      })
+    })
   }
 
   async getSessionMessages(sessionId: string): Promise<RawMessage[]> {
-    return this.cachedFetch(`messages:${sessionId}`, () =>
-      readJsonDir<RawMessage>(path.join(STORAGE_BASE, 'message', sessionId))
-    )
+    return this.cachedFetch(`messages:${sessionId}`, () => {
+      const db = new Database(DB_PATH)
+      const rows = db.query("SELECT * FROM message WHERE session_id = ?").all(sessionId) as any[]
+      db.close()
+      return rows.map(row => {
+        const data = JSON.parse(row.data || '{}')
+        return {
+          id: row.id,
+          sessionID: row.session_id,
+          role: data.role || 'user',
+          time: { created: row.time_created, completed: row.time_updated },
+          parentID: data.parentID,
+          modelID: data.modelID,
+          providerID: data.providerID,
+          mode: data.mode,
+          agent: data.agent,
+          cost: data.cost,
+          tokens: data.tokens,
+          finish: data.finish
+        }
+      })
+    })
   }
 
   async getMessageParts(messageId: string): Promise<RawPart[]> {
-    return readJsonDir<RawPart>(path.join(STORAGE_BASE, 'part', messageId))
+    const db = new Database(DB_PATH)
+    const rows = db.query("SELECT * FROM part WHERE message_id = ?").all(messageId) as any[]
+    db.close()
+    return rows.map(row => {
+      const data = JSON.parse(row.data || '{}')
+      return {
+        id: row.id,
+        sessionID: row.session_id,
+        messageID: row.message_id,
+        type: data.type || 'text',
+        text: data.text,
+        cost: data.cost,
+        tokens: data.tokens
+      }
+    })
   }
 
   // --- Transform to dashboard types ---
@@ -485,6 +559,24 @@ export class OpenCodeReader {
     }
 
     return results
+  }
+
+  async deleteSession(sessionId: string): Promise<boolean> {
+    const db = new Database(DB_PATH)
+    try {
+      const messages = db.query("SELECT id FROM message WHERE session_id = ?").all(sessionId) as any[]
+      for (const msg of messages) {
+        db.run("DELETE FROM part WHERE message_id = ?", [msg.id])
+      }
+      db.run("DELETE FROM message WHERE session_id = ?", [sessionId])
+      db.run("DELETE FROM session WHERE id = ?", [sessionId])
+      db.close()
+      this.invalidateCache()
+      return true
+    } catch (error) {
+      db.close()
+      throw error
+    }
   }
 
   invalidateCache(): void {

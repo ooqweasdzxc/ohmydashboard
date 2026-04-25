@@ -11,7 +11,11 @@ export function AgentLeaderboard({ usage, loading }: Props) {
   const maxCount = sorted.length > 0 ? sorted[0].count : 1
 
   return (
+<<<<<<< HEAD
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden h-full flex flex-col">
+=======
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+>>>>>>> 6533805 (feat: first commit ⚡)
       <div className="px-5 py-4 border-b border-zinc-800">
         <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Agent Leaderboard</h2>
       </div>

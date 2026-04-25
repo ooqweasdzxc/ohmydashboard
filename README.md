@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # OhMyDashboard
 
 Agent monitoring dashboard for [OpenCode](https://opencode.ai) and [OhMyOpenCode](https://github.com/ohmyopencode).
@@ -30,23 +31,24 @@ bunx @radenadri/ohmydashboard --host 0.0.0.0    # expose to network
 - **Model Distribution** — Donut chart showing which models get the most use
 - **Activity Heatmap** — GitHub-style 7-day heatmap (hour x day-of-week)
 - **Session Table** — Full session list with TanStack Table: sorting, search, agent filter, pagination, expandable rows
+- **Session Management** — Delete sessions with confirmation dialog
+- **Enhanced Search** — Search sessions by title, project path, or agent name
+- **Dynamic Versions** — Footer displays actual OpenCode and OhMyOpenCode versions
 - **Date Filtering** — Today / Week / Month / All toggle
 - **Auto-refresh** — Dashboard updates every 15 seconds
 - **Dark Mode** — Because obviously
 
 ## How It Works
 
-OhMyDashboard reads OpenCode's local JSON storage directly from:
+OhMyDashboard reads OpenCode's SQLite database directly:
 
 ```
-~/.local/share/opencode/storage/
-├── sessions/     # Session metadata
-├── messages/     # Message content
-├── parts/        # Message parts (tool calls, results)
-└── projects/     # Project registry
+~/.local/share/opencode/opencode.db
 ```
 
-No database, no API keys, no configuration. If OpenCode runs on your machine, the dashboard just works.
+The database contains tables for sessions, messages, parts, and projects. Using Bun's built-in `bun:sqlite` module for fast, zero-dependency data access.
+
+> **Note:** Older versions of OpenCode used JSON file storage. This dashboard now exclusively supports the SQLite format used by current OpenCode versions.
 
 ## Development
 
@@ -89,7 +91,7 @@ ohmydashboard/
 ├── bin/cli.ts                  # CLI entry (bunx ohmydashboard)
 ├── server/
 │   ├── index.ts                # Hono app + dev server
-│   ├── opencode-reader.ts      # Reads OpenCode JSON storage
+│   ├── opencode-reader.ts      # Reads OpenCode SQLite database
 │   └── cache.ts                # TTL cache (30s)
 ├── src/
 │   ├── App.tsx                 # Dashboard layout
@@ -106,7 +108,7 @@ ohmydashboard/
 ## Requirements
 
 - **Bun** >= 1.1.0
-- **OpenCode** installed and used (needs `~/.local/share/opencode/storage/` to exist)
+- **OpenCode** installed and used (needs `~/.local/share/opencode/opencode.db` to exist)
 
 ## Quick Diagnostics (if `bunx` fails)
 
@@ -148,6 +150,98 @@ This executes, in order:
 
 If any step fails, publish is blocked by `prepublishOnly`.
 
+## What's Changed
+
+### SQLite Migration
+
+- **Replaced JSON file storage with SQLite database support** — OpenCode now uses `opencode.db` instead of JSON files. The dashboard uses Bun's built-in `bun:sqlite` module for fast, zero-dependency access.
+- Updated `server/opencode-reader.ts` to query SQLite tables directly.
+
+### New Features
+
+- **Session Deletion** — Delete sessions with a confirmation dialog. Includes cascade delete (parts → messages → session) to ensure data integrity.
+- **Enhanced Search** — Global search now includes project path/directory, allowing you to find sessions by project name or location.
+- **Dynamic Version Display** — Footer shows actual OpenCode and OhMyOpenCode versions fetched from CLI commands.
+
+### Bug Fixes
+
+- Fixed delete confirmation modal placement — modal was incorrectly triggered by agent filter interactions instead of direct delete button clicks.
+
 ## License
 
 MIT
+=======
+# React + TypeScript + Vite
+
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+
+Currently, two official plugins are available:
+
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+
+## React Compiler
+
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+
+## Expanding the ESLint configuration
+
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+
+```js
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+
+      // Remove tseslint.configs.recommended and replace with this
+      tseslint.configs.recommendedTypeChecked,
+      // Alternatively, use this for stricter rules
+      tseslint.configs.strictTypeChecked,
+      // Optionally, add this for stylistic rules
+      tseslint.configs.stylisticTypeChecked,
+
+      // Other configs...
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
+```
+
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+      // Enable lint rules for React
+      reactX.configs['recommended-typescript'],
+      // Enable lint rules for React DOM
+      reactDom.configs.recommended,
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
+```
+>>>>>>> 6533805 (feat: first commit ⚡)

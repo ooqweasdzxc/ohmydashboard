@@ -25,6 +25,7 @@ import {
   ArrowUp,
   ArrowDown,
   Filter,
+  Trash2,
 } from 'lucide-react'
 import type { Session, SessionMessage } from '../../types/opencode'
 import {
@@ -45,6 +46,19 @@ const multiValueFilter: FilterFn<Session> = (row, columnId, filterValue: string[
   return filterValue.some((v) => agents.includes(v))
 }
 
+// Custom global filter: searches title, directory, and agents
+const globalSearchFilter: FilterFn<Session> = (row, _columnId, filterValue: string) => {
+  if (!filterValue || filterValue.trim() === '') return true
+  const search = filterValue.toLowerCase().trim()
+  const session = row.original
+  
+  return (
+    session.title?.toLowerCase().includes(search) ||
+    session.directory?.toLowerCase().includes(search) ||
+    session.agents.some(agent => agent.toLowerCase().includes(search))
+  )
+}
+
 const columnHelper = createColumnHelper<Session>()
 
 function SortIcon({ sorted }: { sorted: false | 'asc' | 'desc' }) {
@@ -63,6 +77,11 @@ export default function SessionTable({ sessions, loading }: SessionTableProps) {
   const [messages, setMessages] = useState<SessionMessage[]>([])
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [agentFilterOpen, setAgentFilterOpen] = useState(false)
+  const [deleteModal, setDeleteModal] = useState<{
+    open: boolean
+    sessionId: string
+    sessionTitle: string
+  }>({ open: false, sessionId: '', sessionTitle: '' })
 
   // Collect all unique agents for the filter dropdown
   const allAgents = useMemo(() => {
@@ -115,6 +134,30 @@ export default function SessionTable({ sessions, loading }: SessionTableProps) {
       setLoadingMessages(false)
     }
   }, [expandedId])
+
+  const handleDeleteClick = useCallback((sessionId: string, sessionTitle: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setDeleteModal({ open: true, sessionId, sessionTitle })
+  }, [])
+
+  const handleDeleteConfirm = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/sessions/${deleteModal.sessionId}`, { method: 'DELETE' })
+      if (res.ok) {
+        setDeleteModal({ open: false, sessionId: '', sessionTitle: '' })
+        window.location.reload()
+      } else {
+        alert('Delete failed')
+      }
+    } catch (error) {
+      console.error('Delete failed:', error)
+      alert('Delete failed')
+    }
+  }, [deleteModal.sessionId])
+
+  const handleDeleteCancel = useCallback(() => {
+    setDeleteModal({ open: false, sessionId: '', sessionTitle: '' })
+  }, [])
 
   const columns = useMemo(
     () => [
@@ -193,8 +236,22 @@ export default function SessionTable({ sessions, loading }: SessionTableProps) {
           </span>
         ),
       }),
+      columnHelper.display({
+        id: 'actions',
+        header: '',
+        size: 40,
+        cell: ({ row }) => (
+          <button
+            onClick={(e) => handleDeleteClick(row.original.id, row.original.title, e)}
+            className="p-1 hover:bg-red-900/30 rounded transition-colors text-red-400 hover:text-red-300"
+            title="Delete session"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        ),
+      }),
     ],
-    [expandedId, toggleExpand]
+    [expandedId, toggleExpand, handleDeleteClick]
   )
 
   const table = useReactTable({
@@ -208,7 +265,7 @@ export default function SessionTable({ sessions, loading }: SessionTableProps) {
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    globalFilterFn: 'includesString',
+    globalFilterFn: globalSearchFilter,
     initialState: {
       pagination: { pageSize: 10 },
     },
@@ -330,7 +387,7 @@ export default function SessionTable({ sessions, loading }: SessionTableProps) {
                                 />
                               </svg>
                             )}
-                          </div>
+                            </div>
                           <span
                             className="w-2 h-2 rounded-full"
                             style={{ backgroundColor: getAgentChartColor(agent) }}
@@ -514,6 +571,37 @@ export default function SessionTable({ sessions, loading }: SessionTableProps) {
           </button>
         </div>
       </div>
+
+      {/* Delete confirmation modal */}
+      {deleteModal.open && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          onClick={handleDeleteCancel}
+        >
+          <div
+            className="bg-zinc-900 border border-zinc-700 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-zinc-100 mb-2">Delete Session?</h3>
+            <p className="text-zinc-400 mb-2 truncate">"{deleteModal.sessionTitle}"</p>
+            <p className="text-red-400 text-sm mb-4">⚠️ This action cannot be undone.</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={handleDeleteCancel}
+                className="px-4 py-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-md transition-colors font-medium"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
