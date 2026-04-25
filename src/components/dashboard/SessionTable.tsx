@@ -38,6 +38,7 @@ import {
 interface SessionTableProps {
   sessions: Session[]
   loading: boolean
+  onRefresh?: () => void
 }
 
 const multiValueFilter: FilterFn<Session> = (row, columnId, filterValue: string[]) => {
@@ -67,7 +68,7 @@ function SortIcon({ sorted }: { sorted: false | 'asc' | 'desc' }) {
   return <ArrowDown className="w-3.5 h-3.5 text-emerald-400" />
 }
 
-export default function SessionTable({ sessions, loading }: SessionTableProps) {
+export default function SessionTable({ sessions, loading, onRefresh }: SessionTableProps) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'updated', desc: true },
   ])
@@ -145,7 +146,7 @@ export default function SessionTable({ sessions, loading }: SessionTableProps) {
       const res = await fetch(`/api/sessions/${deleteModal.sessionId}`, { method: 'DELETE' })
       if (res.ok) {
         setDeleteModal({ open: false, sessionId: '', sessionTitle: '' })
-        window.location.reload()
+        onRefresh?.()
       } else {
         alert('Delete failed')
       }
@@ -153,7 +154,7 @@ export default function SessionTable({ sessions, loading }: SessionTableProps) {
       console.error('Delete failed:', error)
       alert('Delete failed')
     }
-  }, [deleteModal.sessionId])
+  }, [deleteModal.sessionId, onRefresh])
 
   const handleDeleteCancel = useCallback(() => {
     setDeleteModal({ open: false, sessionId: '', sessionTitle: '' })

@@ -89,5 +89,9 @@ export function useDashboardData(): DashboardData {
     fetchData(dateRange)
   }, [fetchData, dateRange])
 
-  return { stats, agents, sessions, usage, costHistory, models, activity, loading, error, lastUpdated, refresh, secondsUntilRefresh, dateRange, setDateRange }
+  const silentRefresh = useCallback(() => {
+    fetchData(dateRange)
+  }, [fetchData, dateRange])
+
+  return { stats, agents, sessions, usage, costHistory, models, activity, loading, error, lastUpdated, refresh, silentRefresh, secondsUntilRefresh, dateRange, setDateRange }
 }

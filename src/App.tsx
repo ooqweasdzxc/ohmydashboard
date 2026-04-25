@@ -32,6 +32,7 @@ function App() {
     error,
     lastUpdated,
     refresh,
+    silentRefresh,
     secondsUntilRefresh,
     dateRange,
     setDateRange,
@@ -129,7 +130,7 @@ function App() {
         <ActivityHeatmap data={activity} loading={loading} />
 
         {/* Row 5: Sessions Table */}
-        <SessionTable sessions={sessions} loading={loading} />
+        <SessionTable sessions={sessions} loading={loading} onRefresh={silentRefresh} />
       </main>
 
       {/* Footer */}
