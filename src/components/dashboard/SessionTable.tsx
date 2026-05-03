@@ -308,6 +308,7 @@ export default function SessionTable({ sessions, loading, onRefresh }: SessionTa
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     globalFilterFn: globalSearchFilter,
+    autoResetPageIndex: false,
     initialState: {
       pagination: { pageSize: 10 },
     },
