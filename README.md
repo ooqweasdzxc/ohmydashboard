@@ -30,6 +30,7 @@ bunx @radenadri/ohmydashboard --host 0.0.0.0    # expose to network
 - **Model Distribution** — Donut chart showing which models get the most use
 - **Activity Heatmap** — GitHub-style 7-day heatmap (hour x day-of-week)
 - **Session Table** — Full session list with TanStack Table: sorting, search, agent filter, pagination, expandable rows
+- **Session Archive** — Archive/unarchive sessions to declutter your view. Syncs with OpenCode's native archive status (`time_archived`). Archived sessions are hidden by default with a toggle to show them, and displayed with a dimmed style
 - **Session Management** — Delete sessions with confirmation dialog
 - **Enhanced Search** — Search sessions by title, project path, or agent name
 - **Dynamic Versions** — Footer displays actual OpenCode and OhMyOpenCode versions
@@ -158,6 +159,7 @@ If any step fails, publish is blocked by `prepublishOnly`.
 
 ### New Features
 
+- **Session Archive** — Archive and unarchive sessions directly from the session table. Reads/writes OpenCode's native `time_archived` field, so archive status stays in sync across OpenCode and the dashboard. Archived sessions are hidden by default with a "Show archived" toggle.
 - **Session Deletion** — Delete sessions with a confirmation dialog. Includes cascade delete (parts → messages → session) to ensure data integrity.
 - **Enhanced Search** — Global search now includes project path/directory, allowing you to find sessions by project name or location.
 - **Dynamic Version Display** — Footer shows actual OpenCode and OhMyOpenCode versions fetched from CLI commands.

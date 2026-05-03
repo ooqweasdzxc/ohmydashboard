@@ -56,6 +56,17 @@ export function createApp() {
     }
   })
 
+  app.patch('/api/sessions/:id/archive', async (c) => {
+    try {
+      const id = c.req.param('id')
+      const body = await c.req.json<{ archived: boolean }>()
+      await reader.setArchiveStatus(id, body.archived)
+      return c.json({ success: true, archived: body.archived })
+    } catch (error) {
+      return c.json({ success: false, error: 'Failed to update archive status' }, 500)
+    }
+  })
+
   app.get('/api/agents/usage', async (c) => {
     const range = (c.req.query('range') ?? 'all') as DateRange
     return c.json(await reader.getAgentUsage(range))

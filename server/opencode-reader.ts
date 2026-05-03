@@ -15,6 +15,7 @@ interface RawSession {
   parentID?: string
   title: string
   time: { created: number; updated: number }
+  timeArchived?: number | null
 }
 
 interface RawMessage {
@@ -250,7 +251,8 @@ export class OpenCodeReader {
         directory: row.directory,
         parentID: row.parent_id,
         title: row.title,
-        time: { created: row.time_created, updated: row.time_updated }
+        time: { created: row.time_created, updated: row.time_updated },
+        timeArchived: row.time_archived ?? null,
       }))
     })
   }
@@ -359,6 +361,7 @@ export class OpenCodeReader {
           cost,
           agents,
           time: raw.time,
+          archived: !!raw.timeArchived,
         }
       })
       .sort((a, b) => b.time.created - a.time.created)
@@ -573,6 +576,22 @@ export class OpenCodeReader {
       db.close()
       this.invalidateCache()
       return true
+    } catch (error) {
+      db.close()
+      throw error
+    }
+  }
+
+  async setArchiveStatus(sessionId: string, archived: boolean): Promise<void> {
+    const db = new Database(DB_PATH)
+    try {
+      if (archived) {
+        db.run("UPDATE session SET time_archived = ? WHERE id = ?", [Date.now(), sessionId])
+      } else {
+        db.run("UPDATE session SET time_archived = NULL WHERE id = ?", [sessionId])
+      }
+      db.close()
+      this.invalidateCache()
     } catch (error) {
       db.close()
       throw error

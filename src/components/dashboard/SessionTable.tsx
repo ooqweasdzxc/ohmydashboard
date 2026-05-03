@@ -26,6 +26,8 @@ import {
   ArrowDown,
   Filter,
   Trash2,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react'
 import type { Session, SessionMessage } from '../../types/opencode'
 import {
@@ -78,6 +80,7 @@ export default function SessionTable({ sessions, loading, onRefresh }: SessionTa
   const [messages, setMessages] = useState<SessionMessage[]>([])
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [agentFilterOpen, setAgentFilterOpen] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
   const [deleteModal, setDeleteModal] = useState<{
     open: boolean
     sessionId: string
@@ -90,6 +93,12 @@ export default function SessionTable({ sessions, loading, onRefresh }: SessionTa
     sessions.forEach((s) => s.agents.forEach((a) => set.add(a)))
     return Array.from(set).sort()
   }, [sessions])
+
+  const archivedCount = useMemo(() => sessions.filter(s => s.archived).length, [sessions])
+
+  const visibleSessions = useMemo(() => {
+    return showArchived ? sessions : sessions.filter(s => !s.archived)
+  }, [sessions, showArchived])
 
   // Get selected agents from column filter
   const selectedAgents = useMemo(() => {
@@ -159,6 +168,22 @@ export default function SessionTable({ sessions, loading, onRefresh }: SessionTa
   const handleDeleteCancel = useCallback(() => {
     setDeleteModal({ open: false, sessionId: '', sessionTitle: '' })
   }, [])
+
+  const handleArchiveToggle = useCallback(async (sessionId: string, currentlyArchived: boolean, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/archive`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived: !currentlyArchived }),
+      })
+      if (res.ok) {
+        onRefresh?.()
+      }
+    } catch (error) {
+      console.error('Archive toggle failed:', error)
+    }
+  }, [onRefresh])
 
   const columns = useMemo(
     () => [
@@ -240,23 +265,39 @@ export default function SessionTable({ sessions, loading, onRefresh }: SessionTa
       columnHelper.display({
         id: 'actions',
         header: '',
-        size: 40,
+        size: 72,
         cell: ({ row }) => (
-          <button
-            onClick={(e) => handleDeleteClick(row.original.id, row.original.title, e)}
-            className="p-1 hover:bg-red-900/30 rounded transition-colors text-red-400 hover:text-red-300"
-            title="Delete session"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={(e) => handleArchiveToggle(row.original.id, !!row.original.archived, e)}
+              className={
+                row.original.archived
+                  ? 'p-1 hover:bg-emerald-900/30 rounded transition-colors text-emerald-400 hover:text-emerald-300'
+                  : 'p-1 hover:bg-zinc-700 rounded transition-colors text-zinc-500 hover:text-zinc-300'
+              }
+              title={row.original.archived ? 'Unarchive session' : 'Archive session'}
+            >
+              {row.original.archived
+                ? <ArchiveRestore className="w-4 h-4" />
+                : <Archive className="w-4 h-4" />
+              }
+            </button>
+            <button
+              onClick={(e) => handleDeleteClick(row.original.id, row.original.title, e)}
+              className="p-1 hover:bg-red-900/30 rounded transition-colors text-red-400 hover:text-red-300"
+              title="Delete session"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         ),
       }),
     ],
-    [expandedId, toggleExpand, handleDeleteClick]
+    [expandedId, toggleExpand, handleDeleteClick, handleArchiveToggle]
   )
 
   const table = useReactTable({
-    data: sessions,
+    data: visibleSessions,
     columns,
     state: { sorting, columnFilters, globalFilter },
     onSortingChange: setSorting,
@@ -294,7 +335,10 @@ export default function SessionTable({ sessions, loading, onRefresh }: SessionTa
           <h2 className="text-lg font-semibold text-zinc-100">
             Sessions
             <span className="text-sm font-normal text-zinc-500 ml-2">
-              {table.getFilteredRowModel().rows.length} of {sessions.length}
+              {table.getFilteredRowModel().rows.length} of {visibleSessions.length}
+              {!showArchived && archivedCount > 0 && (
+                <span className="text-amber-500"> ({archivedCount} archived)</span>
+              )}
             </span>
           </h2>
 
@@ -318,6 +362,24 @@ export default function SessionTable({ sessions, loading, onRefresh }: SessionTa
                 </button>
               )}
             </div>
+
+            {/* Archive toggle */}
+            <button
+              onClick={() => setShowArchived(!showArchived)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                showArchived
+                  ? 'bg-amber-900/30 border-amber-700 text-amber-300'
+                  : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-zinc-600'
+              }`}
+            >
+              <Archive className="w-3.5 h-3.5" />
+              {showArchived ? 'Hide archived' : 'Show archived'}
+              {!showArchived && archivedCount > 0 && (
+                <span className="bg-zinc-600 text-zinc-200 text-xs px-1.5 rounded-full">
+                  {archivedCount}
+                </span>
+              )}
+            </button>
 
             {/* Agent filter dropdown */}
             <div className="relative">
@@ -629,9 +691,11 @@ function SessionRow({
     <>
       <tr
         className={`border-b border-zinc-800/50 cursor-pointer transition-colors ${
-          isExpanded
-            ? 'bg-zinc-800/50'
-            : 'hover:bg-zinc-800/30'
+          row.original.archived
+            ? 'bg-zinc-900/50 opacity-50'
+            : isExpanded
+              ? 'bg-zinc-800/50'
+              : 'hover:bg-zinc-800/30'
         }`}
         onClick={() => onToggleExpand(row.original.id)}
       >

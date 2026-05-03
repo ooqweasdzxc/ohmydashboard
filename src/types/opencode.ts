@@ -10,6 +10,7 @@ export interface Session {
     created: number
     updated: number
   }
+  archived?: boolean
 }
 
 export interface AgentActivity {

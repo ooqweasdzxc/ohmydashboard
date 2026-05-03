@@ -13,6 +13,7 @@ interface DashboardData {
   error: string | null
   lastUpdated: number | null
   refresh: () => void
+  silentRefresh: () => void
   secondsUntilRefresh: number
   dateRange: DateRange
   setDateRange: (range: DateRange) => void
