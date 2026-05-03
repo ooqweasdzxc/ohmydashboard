@@ -53,7 +53,7 @@ export function useDashboardData(): DashboardData {
         fetchJSON<Session[]>(`/api/sessions${rangeParam}`),
         fetchJSON<AgentUsage[]>(`/api/agents/usage${rangeParam}`),
         fetchJSON<CostHistoryEntry[]>('/api/cost-history'),
-        fetchJSON<ModelUsage[]>('/api/models'),
+        fetchJSON<ModelUsage[]>(`/api/models${rangeParam}`),
         fetchJSON<HourlyActivity[]>('/api/activity'),
       ])
       setStats(statsData)

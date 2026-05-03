@@ -485,9 +485,10 @@ export class OpenCodeReader {
     return days
   }
 
-  async getModelUsage(): Promise<ModelUsage[]> {
+  async getModelUsage(range: DateRange = 'all'): Promise<ModelUsage[]> {
     const allMessages = await this.getAllMessages()
-    const assistantMsgs = allMessages.filter(m => m.role === 'assistant' && m.modelID)
+    const cutoff = getCutoff(range)
+    const assistantMsgs = allMessages.filter(m => m.time.created >= cutoff && m.role === 'assistant' && m.modelID)
 
     const modelMap = new Map<string, { messages: number; cost: number }>()
     for (const msg of assistantMsgs) {
@@ -515,9 +516,13 @@ export class OpenCodeReader {
   async getHourlyActivity(): Promise<HourlyActivity[]> {
     const allMessages = await this.getAllMessages()
 
+    const now = Date.now()
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000
+    const recentMessages = allMessages.filter(m => m.time.created >= sevenDaysAgo)
+
     // 7x24 grid
     const grid = new Map<string, number>()
-    for (const msg of allMessages) {
+    for (const msg of recentMessages) {
       const date = new Date(msg.time.created)
       const day = date.getDay() // 0=Sun
       const hour = date.getHours()

@@ -1,6 +1,5 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import type { ModelUsage } from '@/types/opencode'
-import { formatCost } from '@/lib/utils'
 
 interface ModelDistributionProps {
   data: ModelUsage[]
@@ -15,7 +14,6 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<
       <p className="text-zinc-300 font-medium">{entry.model}</p>
       <div className="flex gap-3 mt-1">
         <span className="text-zinc-400">{entry.messages} msgs</span>
-        <span className="text-emerald-400 font-mono">{formatCost(entry.cost)}</span>
       </div>
       <p className="text-zinc-500 mt-0.5">{entry.percentage}% of total</p>
     </div>
@@ -33,13 +31,12 @@ export function ModelDistribution({ data, loading }: ModelDistributionProps) {
   }
 
   const totalMessages = data.reduce((sum, d) => sum + d.messages, 0)
-  const totalCost = data.reduce((sum, d) => sum + d.cost, 0)
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 h-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Model Distribution</h2>
-        <span className="text-xs text-zinc-500 font-mono">{totalMessages} msgs · {formatCost(totalCost)}</span>
+        <span className="text-xs text-zinc-500 font-mono">{totalMessages.toLocaleString()} msgs</span>
       </div>
 
       <div className="flex items-start gap-4">

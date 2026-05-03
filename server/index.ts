@@ -77,7 +77,8 @@ export function createApp() {
   })
 
   app.get('/api/models', async (c) => {
-    return c.json(await reader.getModelUsage())
+    const range = (c.req.query('range') ?? 'all') as DateRange
+    return c.json(await reader.getModelUsage(range))
   })
 
   app.get('/api/activity', async (c) => {

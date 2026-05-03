@@ -9,11 +9,13 @@ interface Props {
 export function AgentLeaderboard({ usage, loading }: Props) {
   const sorted = [...usage].sort((a, b) => b.count - a.count)
   const maxCount = sorted.length > 0 ? sorted[0].count : 1
+  const totalMsgs = sorted.reduce((sum, a) => sum + a.totalMessages, 0)
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden h-full flex flex-col">
-      <div className="px-5 py-4 border-b border-zinc-800">
+      <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Agent Leaderboard</h2>
+        <span className="text-xs text-zinc-500 font-mono">{totalMsgs.toLocaleString()} msgs</span>
       </div>
 
       {loading ? (
