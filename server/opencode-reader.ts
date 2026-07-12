@@ -1,4 +1,5 @@
 import fs from 'fs/promises'
+import { readdirSync, accessSync } from 'fs'
 import path from 'path'
 import os from 'os'
 import { Database } from 'bun:sqlite'
@@ -131,10 +132,69 @@ export interface SessionMessage {
   tokens?: { input: number; output: number; reasoning: number }
 }
 
-// --- Constants ---
+// --- Constants & multi-db support ---
 
 const STORAGE_BASE = path.join(os.homedir(), '.local/share/opencode/storage')
-const DB_PATH = path.join(os.homedir(), '.local/share/opencode/opencode.db')
+const DB_PATH_DEFAULT = path.join(os.homedir(), '.local/share/opencode/opencode.db')
+
+/** Scan all opencode.db files (default + snap VSCode revisions), return paths that have session data */
+function findAllDbPaths(): string[] {
+  const paths: string[] = []
+
+  // Default path always first
+  try {
+    accessSync(DB_PATH_DEFAULT)
+    paths.push(DB_PATH_DEFAULT)
+  } catch { /* skip */ }
+
+  // Snap VSCode paths
+  const snapBase = path.join(os.homedir(), 'snap', 'code')
+  try {
+    const revisions = readdirSync(snapBase).filter(f => /^\d+$/.test(f))
+    for (const rev of revisions) {
+      const snapDb = path.join(snapBase, rev, '.local/share/opencode/opencode.db')
+      try {
+        accessSync(snapDb)
+        if (snapDb !== DB_PATH_DEFAULT) paths.push(snapDb)
+      } catch { /* skip */ }
+    }
+  } catch { /* no snap dir */ }
+
+  if (paths.length > 1) {
+    console.log(`  \x1b[90m📂 检测到 ${paths.length} 个数据库，已合并读取\x1b[0m`)
+  }
+  return paths
+}
+
+const DB_PATHS = findAllDbPaths()
+
+/**
+ * Run a SQL query on all known databases and merge results.
+ * Results are deduplicated by a key derived from each row (default: row.id).
+ */
+function queryAllDbs<T extends Record<string, unknown>>(
+  sql: string,
+  params?: unknown[],
+  keyFn: (row: T) => string = (r: T) => String(r.id),
+): T[] {
+  const seen = new Set<string>()
+  const results: T[] = []
+  for (const dbPath of DB_PATHS) {
+    try {
+      const db = new Database(dbPath)
+      const rows = db.query(sql).all(...(params ?? [])) as T[]
+      db.close()
+      for (const row of rows) {
+        const key = keyFn(row)
+        if (!seen.has(key)) {
+          seen.add(key)
+          results.push(row)
+        }
+      }
+    } catch { /* skip broken db */ }
+  }
+  return results
+}
 
 const MODEL_COLORS: Record<string, string> = {
   'claude-sonnet-4.5': '#3b82f6',
@@ -226,10 +286,7 @@ export class OpenCodeReader {
 
   async getAllProjects(): Promise<RawProject[]> {
     return this.cachedFetch('projects', () => {
-      const db = new Database(DB_PATH)
-      const rows = db.query("SELECT * FROM project").all() as any[]
-      db.close()
-      return rows.map(row => ({
+      return queryAllDbs<any>("SELECT * FROM project").map(row => ({
         id: row.id,
         worktree: row.worktree,
         vcs: row.vcs,
@@ -240,10 +297,7 @@ export class OpenCodeReader {
 
   async getAllSessions(): Promise<RawSession[]> {
     return this.cachedFetch('sessions', () => {
-      const db = new Database(DB_PATH)
-      const rows = db.query("SELECT * FROM session").all() as any[]
-      db.close()
-      return rows.map(row => ({
+      return queryAllDbs<any>("SELECT * FROM session").map(row => ({
         id: row.id,
         slug: row.slug,
         version: row.version,
@@ -259,10 +313,7 @@ export class OpenCodeReader {
 
   async getAllMessages(): Promise<RawMessage[]> {
     return this.cachedFetch('messages', () => {
-      const db = new Database(DB_PATH)
-      const rows = db.query("SELECT * FROM message").all() as any[]
-      db.close()
-      return rows.map(row => {
+      return queryAllDbs<any>("SELECT * FROM message").map(row => {
         const data = JSON.parse(row.data || '{}')
         return {
           id: row.id,
@@ -284,10 +335,10 @@ export class OpenCodeReader {
 
   async getSessionMessages(sessionId: string): Promise<RawMessage[]> {
     return this.cachedFetch(`messages:${sessionId}`, () => {
-      const db = new Database(DB_PATH)
-      const rows = db.query("SELECT * FROM message WHERE session_id = ?").all(sessionId) as any[]
-      db.close()
-      return rows.map(row => {
+      return queryAllDbs<any>(
+        "SELECT * FROM message WHERE session_id = ?",
+        [sessionId],
+      ).map(row => {
         const data = JSON.parse(row.data || '{}')
         return {
           id: row.id,
@@ -308,9 +359,10 @@ export class OpenCodeReader {
   }
 
   async getMessageParts(messageId: string): Promise<RawPart[]> {
-    const db = new Database(DB_PATH)
-    const rows = db.query("SELECT * FROM part WHERE message_id = ?").all(messageId) as any[]
-    db.close()
+    const rows = queryAllDbs<any>(
+      "SELECT * FROM part WHERE message_id = ?",
+      [messageId],
+    )
     return rows.map(row => {
       const data = JSON.parse(row.data || '{}')
       return {
@@ -570,37 +622,37 @@ export class OpenCodeReader {
   }
 
   async deleteSession(sessionId: string): Promise<boolean> {
-    const db = new Database(DB_PATH)
-    try {
-      const messages = db.query("SELECT id FROM message WHERE session_id = ?").all(sessionId) as any[]
-      for (const msg of messages) {
-        db.run("DELETE FROM part WHERE message_id = ?", [msg.id])
-      }
-      db.run("DELETE FROM message WHERE session_id = ?", [sessionId])
-      db.run("DELETE FROM session WHERE id = ?", [sessionId])
-      db.close()
-      this.invalidateCache()
-      return true
-    } catch (error) {
-      db.close()
-      throw error
+    let anyDeleted = false
+    for (const dbPath of DB_PATHS) {
+      try {
+        const db = new Database(dbPath)
+        const messages = db.query("SELECT id FROM message WHERE session_id = ?").all(sessionId) as any[]
+        for (const msg of messages) {
+          db.run("DELETE FROM part WHERE message_id = ?", [msg.id])
+        }
+        db.run("DELETE FROM message WHERE session_id = ?", [sessionId])
+        db.run("DELETE FROM session WHERE id = ?", [sessionId])
+        db.close()
+        anyDeleted = true
+      } catch { /* skip */ }
     }
+    if (anyDeleted) this.invalidateCache()
+    return anyDeleted
   }
 
   async setArchiveStatus(sessionId: string, archived: boolean): Promise<void> {
-    const db = new Database(DB_PATH)
-    try {
-      if (archived) {
-        db.run("UPDATE session SET time_archived = ? WHERE id = ?", [Date.now(), sessionId])
-      } else {
-        db.run("UPDATE session SET time_archived = NULL WHERE id = ?", [sessionId])
-      }
-      db.close()
-      this.invalidateCache()
-    } catch (error) {
-      db.close()
-      throw error
+    for (const dbPath of DB_PATHS) {
+      try {
+        const db = new Database(dbPath)
+        if (archived) {
+          db.run("UPDATE session SET time_archived = ? WHERE id = ?", [Date.now(), sessionId])
+        } else {
+          db.run("UPDATE session SET time_archived = NULL WHERE id = ?", [sessionId])
+        }
+        db.close()
+      } catch { /* skip */ }
     }
+    this.invalidateCache()
   }
 
   invalidateCache(): void {
